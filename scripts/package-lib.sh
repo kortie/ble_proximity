@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 라이브러리 파일 배포본을 만든다 (D14: Maven 저장소 없이 파일로 배포, ADR-001).
-# 결과: dist/proximity-<version>/ 에 AAR·JAR, DEPENDENCIES.md, SHA256SUMS
+# 결과: dist/proximity-<version>/ 에 AAR·JAR, README.md, proximity-default.yaml, DEPENDENCIES.md, SHA256SUMS
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,6 +25,9 @@ cp proximity-core/build/outputs/aar/proximity-core-release.aar "$out/proximity-c
 cp proximity-platform/build/outputs/aar/proximity-platform-release.aar "$out/proximity-platform-$version.aar"
 cp proximity-testing/build/outputs/aar/proximity-testing-release.aar "$out/proximity-testing-$version.aar"
 cp proximity-crypto/build/libs/proximity-crypto.jar "$out/proximity-crypto-$version.jar"
+# 사용 설명서와 기본 정책 값 (앱이 assets에 넣어 ProximityConfig.fromYaml로 읽는다)
+cp README.md "$out/README.md"
+cp config/default.yaml "$out/proximity-default.yaml"
 
 cat > "$out/DEPENDENCIES.md" <<EOF
 # BLE Proximity $version — 받는 쪽 설정
@@ -47,10 +50,12 @@ dependencies {
 빌드 정보: Kotlin $(ver kotlin), AGP $(ver agp), compileSdk $(ver compileSdk)
 EOF
 
-(cd "$out" && sha256sum ./*.aar ./*.jar > SHA256SUMS)
+(cd "$out" && sha256sum ./*.aar ./*.jar ./proximity-default.yaml > SHA256SUMS)
 
 for f in proximity-core proximity-platform proximity-testing; do test -s "$out/$f-$version.aar"; done
 test -s "$out/proximity-crypto-$version.jar"
 test -s "$out/DEPENDENCIES.md"
+test -s "$out/README.md"
+test -s "$out/proximity-default.yaml"
 echo "PACKAGE: OK ($out)"
 ls -1 "$out"
