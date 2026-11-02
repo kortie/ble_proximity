@@ -1,0 +1,285 @@
+// Rendezvous(rdv)·세션 control(ctl) 메시지 스키마 (ADR-005). S0은 골격이며 S5·S6에서 필드를 채운다.
+// 규칙: 필드 번호 재사용 금지, 삭제한 필드는 reserved. 호환되지 않는 변경은 프레임 ver를 올린다 (I-8).
+// 광고 페이로드와 프레임 헤더는 여기 두지 않는다 (고정 바이트, Codec·Framer).
+syntax = "proto3";
+
+package dev.proximity.proto;
+
+import "google/protobuf/descriptor.proto";
+
+// 비밀 값 표시 (S10, ADR-006 개정): Wire는 이름이 redacted인 필드 옵션을 보고 toString에서 값을 가린다
+extend google.protobuf.FieldOptions {
+  bool redacted = 22300;
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_PLAYER = 1;
+  ROLE_SPECTATOR = 2;
+}
+
+// ---- Rendezvous (04-session-flows §4.2, ADR-006) ----
+
+message RdvMessage {
+  oneof body {
+    ConfirmReq confirm_req = 1;
+    ConfirmAck confirm_ack = 2;
+    ConfirmRefuse confirm_refuse = 3;
+    SealedBody sealed_body = 4;   // K_rdv로 암호화된 RdvSecret
+  }
+}
+
+message ConfirmReq {
+  bytes public_key = 1;   // X25519 임시 공개키
+  bytes nonce = 2;
+  fixed32 temp_id = 3;    // 요청자의 광고 tempId (평문, ADR-008: GATT 연결만으로는 응답자가 상대 광고를 모른다)
+}
+
+message ConfirmAck {
+  bytes public_key = 1;
+  bytes nonce = 2;
+}
+
+message ConfirmRefuse {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_BUSY = 1;
+    REASON_NOT_BUMPED = 2;
+    REASON_REJECTED = 3;
+  }
+  Reason reason = 1;
+}
+
+// 암호화 전 본문. 복호화한 뒤 이 메시지로 읽는다.
+message RdvSecret {
+  oneof body {
+    ConfirmInfo confirm_info = 1;
+    Accept accept = 2;
+    JoinInfo join_info = 3;
+    JoinReject join_reject = 4;
+    BidReroll bid_reroll = 5;
+  }
+}
+
+// decideHost #7 hostBid 동률 → 새 값으로 다시 (04-session-flows §3.3)
+message BidReroll {
+  fixed32 host_bid = 1;
+  int32 round = 2;
+}
+
+message ConfirmInfo {
+  Role role = 1;
+  string display_name = 2;
+  string game_id = 3;
+  int32 game_version = 4;
+  bool in_session = 5;
+  fixed32 session_tag = 6;
+  bool is_host = 7;
+  bool host_capable = 8;
+  fixed32 host_bid = 9;
+  bytes join_nonce = 10;
+}
+
+message Accept {}
+
+message JoinInfo {
+  fixed32 session_tag = 1;
+  bytes token = 2 [(redacted) = true];
+  bytes host_session_public_key = 3;
+}
+
+message JoinReject {
+  int32 reason = 1;
+  int32 game_code = 2; // reason이 GAME_REFUSED일 때 onJoinRequest의 code
+}
+
+message SealedBody {
+  bytes ciphertext = 1 [(redacted) = true];   // ChaCha20-Poly1305 암호문 ‖ 태그
+}
+
+// ---- 세션 control (04-session-flows §6, §7) ----
+
+message CtlMessage {
+  oneof body {
+    Hello hello = 1;
+    Welcome welcome = 2;
+    Reject reject = 3;
+    Ack ack = 4;
+    TokenReq token_req = 5;
+    Token token = 6;
+    TokenReject token_reject = 7;
+    Participants participants = 8;
+    Leave leave = 9;
+    Ping ping = 10;
+    Pong pong = 11;
+    Capacity capacity = 12;
+    Denied denied = 13;
+  }
+}
+
+// 남은 자리 (호스트 → 전원, 바뀔 때만, S7). 멤버는 광고 accepting에 싣는다
+message Capacity {
+  bool accepting = 1;
+  int32 player_slots = 2;
+  int32 spectator_slots = 3;
+}
+
+// 역할상 보낼 수 없는 채널 (관전자의 game). 송신자에게만, 순번 없음 (S7, I-12)
+message Denied {
+  int32 channel = 1;
+  int32 kind = 2;
+}
+
+// 참가자 목록 (호스트 → 전원, 합류·이탈마다)
+message Participants {
+  repeated ParticipantEntry entries = 1;
+}
+
+message ParticipantEntry {
+  int32 id = 1;
+  Role role = 2;
+  string display_name = 3;
+}
+
+message Leave {}
+
+message Ping {
+  int64 sent_at_ms = 1;
+}
+
+message Pong {
+  int64 sent_at_ms = 1;
+}
+
+// GATT SESSION_INFO 읽기 값 (04-session-flows §6): 연결 전에 빠른 거절용
+message SessionInfo {
+  int32 version = 1;
+  string game_id = 2;
+  int32 game_version = 3;
+  bool accepting = 4;
+  int32 free_player_slots = 5;
+  int32 free_spectator_slots = 6;
+  bytes host_session_public_key = 7; // 세션 코드 합류는 이것을 믿는다 (TOFU, 04 §5.2.2)
+  int32 session_tag = 8;
+}
+
+// 멤버 → 호스트: 신규 기기용 join token 요청 (04-session-flows §5.2)
+message TokenReq {
+  bytes join_nonce = 1;
+  Role role = 2;
+  int32 game_version = 3;
+  string display_name = 4;
+}
+
+message Token {
+  bytes token = 1 [(redacted) = true];
+  fixed32 session_tag = 2;
+  bytes host_session_public_key = 3;
+  int64 expires_at_ms = 4;
+}
+
+message TokenReject {
+  int32 reason = 1;
+  int32 game_code = 2;
+}
+
+message Hello {
+  bytes client_public_key = 1;   // 평문 (링크 키 계산용)
+  bytes sealed_body = 2 [(redacted) = true];         // 링크 키로 암호화된 HelloBody
+}
+
+message HelloBody {
+  oneof kind {
+    NewJoin new_join = 1;
+    Resume resume = 2;
+    CodeJoin code_join = 3;
+  }
+  message NewJoin {
+    bytes token = 1 [(redacted) = true];
+    bytes join_nonce = 2;
+    Role role = 3;
+    string display_name = 4;
+    string game_id = 5;
+    int32 game_version = 6;
+    bytes join_secret = 7 [(redacted) = true]; // 중복 HELLO를 같은 기기로 묶는다 (S10, 봉인된 HELLO 안에만)
+  }
+  // 세션 코드 합류 (S9, 04 §5.2.2): token 대신 코드. 호스트 승인 뒤 WELCOME
+  message CodeJoin {
+    string code = 1;
+    bytes join_nonce = 2;
+    Role role = 3;
+    string display_name = 4;
+    string game_id = 5;
+    int32 game_version = 6;
+  }
+  message Resume {
+    int32 participant_id = 1;
+    bytes resume_secret = 2 [(redacted) = true];
+    int64 last_seq = 3;
+  }
+}
+
+message Welcome {
+  int32 participant_id = 1;
+  bytes resume_secret = 2 [(redacted) = true];
+  Role role = 3;
+  string display_name = 4;
+}
+
+message Reject {
+  int32 reason = 1;
+  int32 game_code = 2;
+}
+
+message Ack {
+  int64 last_seq = 1;
+}
+
+// ---- game 채널 (S8, ADR-004). kind: ACTION=1, ACTION_RESULT=2, EVENT=3(본문 그대로), VIEW=4, SNAPSHOT=5, END=6 ----
+
+message GameAction {
+  int64 action_id = 1;
+  bytes data = 2;
+}
+
+message GameActionResult {
+  enum Outcome {
+    OUTCOME_UNSPECIFIED = 0;
+    OUTCOME_ACCEPTED = 1;
+    OUTCOME_REJECTED = 2;
+    OUTCOME_NOT_ALLOWED = 3;
+    OUTCOME_TOO_LARGE = 4;
+    OUTCOME_RATE_LIMITED = 5;
+  }
+  int64 action_id = 1;
+  Outcome outcome = 2;
+  int32 code = 3;
+  bytes detail = 4;
+  bool has_detail = 5;
+}
+
+message GameView {
+  int64 revision = 1;
+  bytes data = 2;
+}
+
+message GameEnd {
+  bytes result = 1;
+  bool has_result = 2;
+}
+
+// social 채널: 호스트가 링크 바인딩으로 송신자를 채운다
+message SocialMessage {
+  int32 from = 1;
+  bytes data = 2;
+}
+
+// QR 합류 (S9, 04 §5.2.1). 문자열 = "BP1." + base64url(이 메시지)
+message QrTicket {
+  int32 session_tag = 1;
+  bytes token = 2 [(redacted) = true];
+  bytes join_nonce = 3;
+  bytes host_session_public_key = 4;
+  int64 expires_at_ms = 5;
+  string game_id = 6;
+}

@@ -1,0 +1,27 @@
+# 기준치(합격선)의 기계용 값. 사람용 설명·운영 규칙은 docs/thresholds.md — 두 파일은 함께 고친다.
+# 잠정값이다 (D5). S11 실측 후 한 번 확정하고 docs/thresholds.md "변경 기록"에 남긴다.
+# S0_ThresholdsSyncTest가 모든 키가 docs/thresholds.md에 적혀 있는지 검사한다.
+
+bump:
+  detect_success_min: 0.9          # 10회 중 9회
+  false_positive_max: 0.02         # 100건 중 2건
+
+matching:
+  first_try_rate_n2: 0.95
+  first_try_rate_n4: 0.90
+  first_try_rate_n8: 0.80
+  final_rate_n2: 0.99
+  final_rate_n4: 0.97
+  final_rate_n8: 0.95
+  wrong_match_max: 0
+
+session:
+  downlink_p95_ms: 500
+  resync_max_ms: 2000
+
+e2e:
+  action_roundtrip_p95_ms: 1000
+  bump_to_confirm_p95_ms: 2000
+  accept_to_welcome_p95_ms: 5000
+  battery_host_pct_per_hour: 15
+  battery_client_pct_per_hour: 10

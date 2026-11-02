@@ -1,0 +1,75 @@
+# 정책 값의 단일 출처 (원본 §6.2 + 01-architecture §6). 코드에 기본값을 두지 않는다.
+# 형식: 2단계 맵 + 스칼라만 (ProximityConfig 파서가 이 범위만 읽는다). 키 누락·모르는 키는 오류.
+# 기준치(합격선)는 config/thresholds.yaml (docs/thresholds.md 운영 규칙).
+
+matching:
+  window_ms: 300
+  rssi_min_dbm: -70
+  rssi_strong_dbm: -30       # RSSI 정규화 상한 (이 이상은 1.0)
+  weight_time: 0.3           # D11: 가장 가까운 기기 우선 → RSSI 가중치를 크게 (시간은 F5 창이 이미 거른다)
+  weight_rssi: 0.7
+  bump_flag_wait_ms: 800     # 범프 후 상대 광고의 bumpSeq 변화를 기다리는 시간 (S4 실측)
+  max_attempts: 2            # 가까운 순으로 자동 시도하는 후보 수
+  attempt_timeout_ms: 3000   # 한 후보의 CONFIRM 응답 대기
+  retry_cooldown_ms: 10000   # 실패·거절된 상대를 다시 후보로 올리지 않는 시간
+  rdv_backoff_ms: 300        # 서로 고른 경우 tempId 큰 쪽의 접속 대기
+
+timeouts:
+  candidate_ms: 5000
+  confirming_ms: 20000       # 양쪽 사용자가 확인 화면에서 탭하는 시간 포함 (ADR-006)
+  joining_ms: 10000          # JOIN_INFO 수신 → WELCOME까지
+
+ble:
+  id_rotate_sec: 300
+  protocol_version: 1
+  peer_ttl_ms: 5000           # 이 시간 동안 광고가 안 보이면 관측 표에서 뺀다
+
+bump:
+  threshold_g: 2.5
+  debounce_ms: 500
+  spike_max_ms: 80           # threshold_g/2 이상 구간 폭 상한 (날카로움)
+  pre_quiet_ms: 300          # 스파이크 직전 정지 구간 길이
+  quiet_g: 0.6               # 직전 정지 구간 동적 가속도 상한
+  gravity_alpha: 0.05        # 중력 추정 지수 이동 평균 계수
+  sample_period_us: 10000    # 가속도 샘플 주기 (100Hz)
+
+security:
+  nonce_ttl_sec: 30
+  max_connect_per_min: 10
+  sas_digits: 2              # 확인 화면 코드 자릿수 (D6)
+  aead: chacha20-poly1305
+  max_auth_failures: 3       # 링크에서 태그 검증 실패가 이만큼 나면 링크 끊기
+
+session:
+  max_links: 7               # 호스트 물리 링크 상한 (잠정, S6·S11 실측). 8인 게임에 7 필요
+  max_players: 8             # 호스트 포함 (D8). GameDescriptor.maxPlayers와 작은 값 사용
+  max_spectators: 4          # 관전자 상한. 실제 한도는 04-session-flows §5.3 식으로 계산
+  max_display_name_bytes: 32
+  host_grace_ms: 15000       # 호스트 끊김 → Paused 유지 시간
+  client_reconnect_ms: 10000 # 클라이언트 재연결 유예
+  join_token_ttl_sec: 30
+  host_bid_retries: 3        # decideHost 결정표 #7 hostBid 동률 재추첨 횟수
+  join_connect_retries: 2    # 합류 중 호스트 연결 재시도 횟수 (S5 재시도 정책)
+  join_retry_backoff_ms: 1000
+
+transport:
+  frame_header_bytes: 10
+  resend_window: 64          # 링크마다 보관하는 최근 다운링크 수
+  hello_timeout_ms: 5000     # 연결 후 HELLO가 없으면 끊음
+  ack_interval_ms: 1000      # 클라이언트 누적 ACK 주기
+  ack_every_n: 16            # 또는 N개 수신마다 ACK
+  link_queue_max: 128        # 초과 시 그 링크만 SNAPSHOT으로 따라잡기
+  keepalive_ms: 2000         # 클라이언트가 Live 동안 PING을 보내는 주기 (S11 실기기에서 추가, 잠정)
+  link_timeout_ms: 6000      # 이 시간 동안 링크에서 아무것도 못 받으면 죽은 링크로 보고 끊는다 (잠정)
+
+game:
+  max_action_bytes: 512
+  max_event_bytes: 1024
+  max_view_bytes: 4096       # 수신자별 전송이므로 작게 (03-game-data-api §6)
+  max_actions_per_sec: 5     # 참가자별
+  action_timeout_ms: 5000
+  dedup_window: 256          # 참가자별로 기억하는 최근 actionId 수
+
+social:
+  max_msg_bytes: 140
+  max_msg_per_min: 20

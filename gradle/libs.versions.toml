@@ -1,0 +1,32 @@
+# 모든 버전은 이 파일에서만 관리한다 (모듈 build 파일에 버전 리터럴 금지).
+# 런타임 의존은 최소로 둔다: 라이브러리 파일로 배포하므로 받는 쪽이 직접 추가해야 한다 (ADR-001).
+# scripts/package-lib.sh가 [versions]의 런타임 항목을 DEPENDENCIES.md로 옮긴다.
+
+[versions]
+agp = "8.13.2"
+kotlin = "2.2.21"
+coroutines = "1.10.2"
+wire = "5.5.1"
+bouncycastle = "1.85"
+compileSdk = "36"
+minSdk = "31"
+targetSdk = "36"
+jvmTarget = "17"
+# 샘플 앱 전용 (라이브러리 배포물에는 들어가지 않는다): Lab 화면의 QR 그리기·읽기
+zxing = "3.5.3"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
+bouncycastle-prov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+wire = { id = "com.squareup.wire", version.ref = "wire" }
